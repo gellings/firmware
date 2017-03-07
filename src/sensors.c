@@ -26,24 +26,6 @@ float _imu_temperature;
 uint64_t _imu_time;
 bool new_imu_data = false;
 
-// Airspeed
-bool _diff_pressure_present = false;
-float _diff_pressure_velocity, _diff_pressure, _diff_pressure_temp;
-
-// Barometer
-bool _baro_present = false;
-float _baro_altitude;
-float _baro_pressure;
-float _baro_temperature;
-
-// Sonar
-bool _sonar_present = false;
-float _sonar_range;
-
-// Magnetometer
-bool _mag_present = false;
-vector_t _mag;
-
 
 //==================================================================
 // local variable definitions
@@ -60,21 +42,34 @@ static bool calibrating_gyro_flag;
 static void calibrate_accel(void);
 static void calibrate_gyro(void);
 static void correct_imu(void);
-static void correct_mag(void);
 static void imu_ISR(void);
 static bool update_imu(void);
+
+static gpio_config_t camera_pin;
+bool _image_associated = false;
+
+static uint64_t micros_between_camera_images = 0;
+
+void set_framerate()
+{
+    micros_between_camera_images = (uint64_t) 1e6/get_param_float(PARAM_CAMERA_FRAME_RATE);
+}
 
 
 //==================================================================
 // function definitions
 void init_sensors(void)
 {
+  camera_pin.pin = Pin_0;
+  camera_pin.mode = Mode_Out_PP;
+  camera_pin.speed = Speed_50MHz;
+
+  gpioInit(GPIOA, &camera_pin);
+
   while (millis() < 50);
   i2cWrite(0,0,0);
-  _baro_present = ms5611_init();
-  _mag_present = hmc5883lInit(get_param_int(PARAM_BOARD_REVISION));
-  _sonar_present = mb1242_init();
-  _diff_pressure_present = ms4525_init();
+
+  set_framerate();
 
   // IMU
   uint16_t acc1G;
@@ -86,79 +81,6 @@ void init_sensors(void)
 
 bool update_sensors()
 {
-  // Look for disabled sensors while disarmed (poll every 0.5 seconds)
-  // These sensors need power to respond, so they might not have been
-  // detected on startup, but will be detected whenever power is applied
-  // to the 5V rail.
-  static uint32_t last_time_look_for_disarmed_sensors = 0;
-  if (_armed_state == DISARMED || _armed_state == FAILSAFE_DISARMED)
-  {
-    uint32_t now = millis();
-    if (now > (last_time_look_for_disarmed_sensors + 500))
-    {
-      last_time_look_for_disarmed_sensors = now;
-      if (!_sonar_present)
-      {
-        mb1242_update();
-        _sonar_present = (mb1242_read() > 0.2);
-        if (_sonar_present)
-        {
-          mavlink_log_info("FOUND SONAR", NULL);
-        }
-      }
-      if (!_diff_pressure_present)
-      {
-        _diff_pressure_present = ms4525_init();
-        if (_diff_pressure_present)
-        {
-          mavlink_log_info("FOUND DIFF PRESS", NULL);
-        }
-      }
-      if (!_mag_present)
-      {
-        _mag_present = hmc5883lInit(get_param_int(PARAM_BOARD_REVISION));
-        if (_mag_present)
-        {
-          mavlink_log_info("FOUND MAG", NULL);
-        }
-      }
-    }
-  }
-
-  if (_baro_present)
-  {
-    ms5611_update();
-    ms5611_read(&_baro_altitude, &_baro_pressure, &_baro_temperature);
-    _baro_altitude *= -1.0; // convert to NED
-  }
-
-  if (_diff_pressure_present)
-  {
-    if (_baro_present)
-    {
-      ms4525_set_atm((uint32_t) _baro_pressure);
-    }
-    ms4525_update();
-    ms4525_read(&_diff_pressure, &_diff_pressure_temp, &_diff_pressure_velocity);
-  }
-
-  if (_sonar_present)
-  {
-    mb1242_update();
-    _sonar_range = mb1242_read();
-  }
-
-  if (_mag_present)
-  {
-    int16_t raw_mag[3] = {0,0,0};
-    hmc5883l_update();
-    hmc5883l_read(raw_mag);
-    _mag.x = (float)raw_mag[0];
-    _mag.y = (float)raw_mag[1];
-    _mag.z = (float)raw_mag[2];
-    correct_mag();
-  }
-
   // Return whether or not we got new IMU data
   return update_imu();
 }
@@ -196,8 +118,20 @@ bool gyro_calibration_complete(void)
 // local function definitions
 void imu_ISR(void)
 {
-  _imu_time = micros();
+  uint64_t now = micros();
+  _imu_time = now;
   new_imu_data = true;
+
+  static uint64_t last_time_fired;
+  if (now > last_time_fired + micros_between_camera_images)
+  {
+    last_time_fired = now;
+    digitalHi(GPIOA, Pin_0);
+  }
+  else
+  {
+    digitalLo(GPIOA, Pin_0);
+  }
 }
 
 
@@ -385,22 +319,6 @@ static void correct_imu(void)
   _gyro.x -= get_param_float(PARAM_GYRO_X_BIAS);
   _gyro.y -= get_param_float(PARAM_GYRO_Y_BIAS);
   _gyro.z -= get_param_float(PARAM_GYRO_Z_BIAS);
-}
-
-static void correct_mag(void)
-{
-  // correct according to known hard iron bias
-  float mag_hard_x = _mag.x - get_param_float(PARAM_MAG_X_BIAS);
-  float mag_hard_y = _mag.y - get_param_float(PARAM_MAG_Y_BIAS);
-  float mag_hard_z = _mag.z - get_param_float(PARAM_MAG_Z_BIAS);
-
-  // correct according to known soft iron bias - converts to nT
-  _mag.x = get_param_float(PARAM_MAG_A11_COMP)*mag_hard_x + get_param_float(PARAM_MAG_A12_COMP)*mag_hard_y +
-           get_param_float(PARAM_MAG_A13_COMP)*mag_hard_z;
-  _mag.y = get_param_float(PARAM_MAG_A21_COMP)*mag_hard_x + get_param_float(PARAM_MAG_A22_COMP)*mag_hard_y +
-           get_param_float(PARAM_MAG_A23_COMP)*mag_hard_z;
-  _mag.z = get_param_float(PARAM_MAG_A31_COMP)*mag_hard_x + get_param_float(PARAM_MAG_A32_COMP)*mag_hard_y +
-           get_param_float(PARAM_MAG_A33_COMP)*mag_hard_z;
 }
 
 

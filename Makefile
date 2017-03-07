@@ -19,13 +19,8 @@ PROJECT_SRC = src/main.c \
               src/mavlink_receive.c \
               src/mavlink_stream.c \
               src/mavlink_util.c \
-              src/mixer.c \
               src/param.c \
-              src/rc.c \
-              src/sensors.c \
-              src/mux.c \
-              src/controller.c \
-              src/mode.c \
+              src/sensors.c
 
 ###############################################################################
 
@@ -52,18 +47,11 @@ BIN_DIR		 = $(ROOT)/build
 
 rosflight_SRC =$(BREEZY_DIR)/drv_gpio.c \
                $(BREEZY_DIR)/drv_i2c.c \
-               $(BREEZY_DIR)/drv_adc.c \
-               $(BREEZY_DIR)/drv_spi.c \
-               $(BREEZY_DIR)/drv_pwm.c \
                $(BREEZY_DIR)/drv_system.c \
                $(BREEZY_DIR)/drv_serial.c \
                $(BREEZY_DIR)/drv_uart.c \
                $(BREEZY_DIR)/drv_timer.c \
                $(BREEZY_DIR)/drv_mpu6050.c \
-               $(BREEZY_DIR)/drv_ms4525.c \
-               $(BREEZY_DIR)/drv_mb1242.c \
-               $(BREEZY_DIR)/drv_ms5611.c \
-               $(BREEZY_DIR)/drv_hmc5883l.c \
                $(BREEZY_DIR)/printf.c \
                $(BREEZY_DIR)/startup_stm32f10x_md_gcc.S \
                $(TURBOTRIG_DIR)/turbotrig.c \
