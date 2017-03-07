@@ -158,6 +158,7 @@ void set_param_defaults(void)
   /*******************************/
   init_param_int(PARAM_INIT_TIME, "FILTER_INIT_T", 3000); // Time in ms to initialize estimator | 0 | 100000
   init_param_float(PARAM_FILTER_KP, "FILTER_KP", 1.0f); // estimator proportional gain - See estimator documentation | 0 | 10.0
+  init_param_float(PARAM_FILTER_KP_MAG, "FILTER_KP_MAG", 0.2f); // estimator proportional gain - See estimator documentation | 0 | 10.0
   init_param_float(PARAM_FILTER_KI, "FILTER_KI", 0.1f); // estimator integral gain - See estimator documentation | 0 | 1.0
 
   init_param_float(PARAM_GYRO_ALPHA, "GYRO_LPF_ALPHA", 0.888f); // Low-pass filter constant - See estimator documentation | 0 | 1.0
@@ -187,6 +188,9 @@ void set_param_defaults(void)
   init_param_float(PARAM_MAG_X_BIAS,  "MAG_X_BIAS", 0.0f); // Hard iron compensation constant | -999.0 | 999.0
   init_param_float(PARAM_MAG_Y_BIAS,  "MAG_Y_BIAS", 0.0f); // Hard iron compensation constant | -999.0 | 999.0
   init_param_float(PARAM_MAG_Z_BIAS,  "MAG_Z_BIAS", 0.0f); // Hard iron compensation constant | -999.0 | 999.0
+  init_param_float(PARAM_MAG_WORLD_N, "MAG_WORLD_N", 20946.9f); // North Component of Earth's magnetic field (uT) | -60000.0 | 60000.0
+  init_param_float(PARAM_MAG_WORLD_E, "MAG_WORLD_E", 4196.8f); // East Component of Earth's magnetic field (uT) | -60000.0 | 60000.0
+  init_param_float(PARAM_MAG_WORLD_D, "MAG_WORLD_D", 46871.1); // Down Component of Earth's magnetic field (uT) | -60000.0 | 60000.0
 
   /************************/
   /*** RC CONFIGURATION ***/
@@ -310,6 +314,12 @@ void param_change_callback(param_id_t id)
     break;
   case PARAM_STREAM_RC_RAW_RATE:
     mavlink_stream_set_rate(MAVLINK_STREAM_ID_RC_RAW, get_param_int(PARAM_STREAM_RC_RAW_RATE));
+    break;
+
+  case PARAM_MAG_WORLD_N:
+  case PARAM_MAG_WORLD_E:
+  case PARAM_MAG_WORLD_D:
+    reset_state();
     break;
 
   case PARAM_RC_TYPE:

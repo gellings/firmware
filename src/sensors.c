@@ -260,8 +260,18 @@ static void calibrate_accel(void)
 {
   static uint16_t count = 0;
   static vector_t acc_sum  = { 0.0f, 0.0f, 0.0f };
+  static vector_t max = {-100.0f, -100.0f, -100.f};
+  static vector_t min = {100.0f, 100.0f, 100.0f};
   static const vector_t gravity = {0.0f, 0.0f, 9.80665f};
   static float acc_temp_sum = 0.0f;
+
+//  max.x = (_accel.x > max.x) ? _accel.x : max.x;
+//  max.y = (_accel.y > max.y) ? _accel.y : max.y;
+//  max.z = (_accel.z > max.z) ? _accel.z : max.z;
+
+//  min.x = (_accel.x < min.x) ? _accel.x : min.x;
+//  min.y = (_accel.y < min.y) ? _accel.y : min.y;
+//  min.z = (_accel.z < min.z) ? _accel.z : min.z;
 
   acc_sum = vector_add(vector_add(acc_sum, _accel), gravity);
   acc_temp_sum += _imu_temperature;
@@ -289,7 +299,8 @@ static void calibrate_accel(void)
     // Sanity Check -
     // If the accelerometer is upside down or being spun around during the calibration,
     // then don't do anything
-    if (sqrd_norm(accel_bias) < 4.5)
+    vector_t change = vector_sub(max, min);
+    if (sqrd_norm(change) < 0.1)
     {
       set_param_float(PARAM_ACC_X_BIAS, accel_bias.x);
       set_param_float(PARAM_ACC_Y_BIAS, accel_bias.y);
@@ -302,22 +313,22 @@ static void calibrate_accel(void)
     }
     else
     {
-      // check for bad _accel_scale
-      if (sqrd_norm(accel_bias) > 4.5*4.5 && sqrd_norm(accel_bias) < 5.5*5.5)
-      {
-        mavlink_log_error("Detected bad IMU accel scale value", 0);
-        set_param_float(PARAM_ACCEL_SCALE, 2.0 * get_param_float(PARAM_ACCEL_SCALE));
-        write_params();
-      }
-      else if (sqrd_norm(accel_bias) > 9.0*9.0 && sqrd_norm(accel_bias) < 11.0*11.0)
+      // check for bad accel scale
+      if (sqrd_norm(accel_bias) > 9.0*9.0)
       {
         mavlink_log_error("Detected bad IMU accel scale value", 0);
         set_param_float(PARAM_ACCEL_SCALE, 0.5 * get_param_float(PARAM_ACCEL_SCALE));
         write_params();
       }
+      else if (sqrd_norm(accel_bias) > 4.0*4.0)
+      {
+        mavlink_log_error("Detected bad IMU accel scale value", 0);
+        set_param_float(PARAM_ACCEL_SCALE, 2.0 * get_param_float(PARAM_ACCEL_SCALE));
+        write_params();
+      }
       else
       {
-        mavlink_log_error("Too much movement for IMU cal", NULL);
+        mavlink_log_error("Too much movement for IMU calibration");
         calibrating_acc_flag = false;
       }
     }
@@ -327,6 +338,8 @@ static void calibrate_accel(void)
     acc_sum.x = 0.0f;
     acc_sum.y = 0.0f;
     acc_sum.z = 0.0f;
+    max.x = max.y = max.z = 0.0f;
+    min.x = min.y = min.z = 0.0f;
     acc_temp_sum = 0.0f;
   }
 }

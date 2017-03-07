@@ -89,6 +89,7 @@ typedef enum
   /*******************************/
   PARAM_INIT_TIME,
   PARAM_FILTER_KP,
+  PARAM_FILTER_KP_MAG,
   PARAM_FILTER_KI,
 
   PARAM_GYRO_ALPHA,
@@ -118,6 +119,9 @@ typedef enum
   PARAM_MAG_X_BIAS,
   PARAM_MAG_Y_BIAS,
   PARAM_MAG_Z_BIAS,
+  PARAM_MAG_WORLD_N,
+  PARAM_MAG_WORLD_E,
+  PARAM_MAG_WORLD_D,
 
   /************************/
   /*** RC CONFIGURATION ***/

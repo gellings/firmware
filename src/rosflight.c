@@ -56,7 +56,8 @@ void rosflight_run(void)
   // mat_exp <- greater accuracy, but adds ~90 us
   // quadratic_integration <- some additional accuracy, adds ~20 us
   // accelerometer correction <- if using angle mode, this is required, adds ~70 us
-  init_estimator(false, false, true);
+  // magnetometer correction <- if using compass, this is required, adds ~70 us
+  init_estimator(false, false, true, true);
   init_mode();
 
   // Main loop

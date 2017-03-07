@@ -23,7 +23,9 @@ static vector_t w2;
 static vector_t wbar;
 static vector_t wfinal;
 static vector_t w_acc;
+static vector_t w_mag;
 static const vector_t g = {0.0f, 0.0f, -1.0f};
+static vector_t magnetic_field = {0.0f, 0.0f, 0.0f};
 static vector_t b;
 static quaternion_t q_tilde;
 static quaternion_t q_hat;
@@ -32,6 +34,7 @@ static uint64_t last_time;
 static bool mat_exp;
 static bool quad_int;
 static bool use_acc;
+static bool use_mag;
 
 static vector_t _accel_LPF;
 static vector_t _gyro_LPF;
@@ -82,6 +85,11 @@ void reset_state()
   _gyro_LPF.x = 0;
   _gyro_LPF.y = 0;
   _gyro_LPF.z = 0;
+
+  magnetic_field.x = get_param_float(PARAM_MAG_WORLD_N);
+  magnetic_field.y = get_param_float(PARAM_MAG_WORLD_E);
+  magnetic_field.z = get_param_float(PARAM_MAG_WORLD_D);
+  magnetic_field = vector_normalize(magnetic_field);
 }
 
 void reset_adaptive_bias()
@@ -91,11 +99,12 @@ void reset_adaptive_bias()
   b.z = 0;
 }
 
-void init_estimator(bool use_matrix_exponential, bool use_quadratic_integration, bool use_accelerometer)
+void init_estimator(bool use_matrix_exponential, bool use_quadratic_integration, bool use_accelerometer, bool use_magnetometer)
 {
   mat_exp = use_matrix_exponential;
   quad_int = use_quadratic_integration;
   use_acc = use_accelerometer;
+  use_mag =  use_magnetometer;
 
   last_time = 0;
 
@@ -118,7 +127,7 @@ void run_LPF()
 
 void run_estimator()
 {
-  static float kp, ki;
+  static float kp, kp_mag, ki;
   _current_state.now_us = _imu_time;
   if (last_time == 0 || _current_state.now_us <= last_time)
   {
@@ -133,11 +142,13 @@ void run_estimator()
   if (_imu_time < (uint64_t)get_param_int(PARAM_INIT_TIME)*1000)
   {
     kp = get_param_float(PARAM_FILTER_KP)*10.0f;
+    kp_mag = get_param_float(PARAM_FILTER_KP_MAG)*10.0f;
     ki = get_param_float(PARAM_FILTER_KI)*10.0f;
   }
   else
   {
     kp = get_param_float(PARAM_FILTER_KP);
+    kp_mag = get_param_float(PARAM_FILTER_KP_MAG);
     ki = get_param_float(PARAM_FILTER_KI);
   }
 
@@ -176,6 +187,24 @@ void run_estimator()
     w_acc.z = 0.0f;
   }
 
+  // add in magnetometer
+  if (use_mag)
+  {
+    vector_t m = vector_normalize(_mag);
+    quaternion_t q_mag_inv = quaternion_inverse(quat_from_two_vectors(m, magnetic_field));
+    quaternion_t q_tilde_mag = quaternion_multiply(q_mag_inv, q_hat);
+    w_mag.x = 0.0; // Only correct heading, because attitude is better handled by accels
+    w_mag.y = 0.0;
+    w_mag.z = -2.0f*q_tilde_mag.w*q_tilde_mag.z;
+    b.z -= ki*w_mag.z*dt;
+  }
+  else
+  {
+    w_mag.x = 0.0f;
+    w_mag.y = 0.0f;
+    w_mag.z = 0.0f;
+  }
+
   // Pull out Gyro measurements
   if (quad_int)
   {
@@ -193,7 +222,7 @@ void run_estimator()
 
   // Build the composite omega vector for kinematic propagation
   // This the stuff inside the p function in eq. 47a - Mahoney Paper
-  wfinal = vector_add(vector_sub(wbar, b), scalar_multiply(kp, w_acc));
+  wfinal = vector_add(vector_add(vector_sub(wbar, b), scalar_multiply(kp, w_acc)), scalar_multiply(kp_mag, w_mag));
 
   // Propagate Dynamics (only if we've moved)
   float sqrd_norm_w = sqrd_norm(wfinal);
