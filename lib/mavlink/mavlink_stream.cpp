@@ -39,6 +39,7 @@
 #include "param.h"
 #include "mode.h"
 #include "rc.h"
+#include "rosflight.h"
 
 namespace rosflight
 {

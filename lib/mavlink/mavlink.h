@@ -31,6 +31,8 @@
 
 #pragma once
 
+#include "param.h"
+
 #include <mavlink/v1.0/rosflight/mavlink.h>
 
 #define CALL_MEMBER_FN(object,ptrToMember)  ((object).*(ptrToMember))
