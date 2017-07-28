@@ -54,6 +54,8 @@ void Estimator::reset_state()
   state_.pitch = 0.0f;
   state_.yaw = 0.0f;
 
+  state_.alpha = 0.0f;
+
   w1_.x = 0.0f;
   w1_.y = 0.0f;
   w1_.z = 0.0f;
@@ -73,6 +75,10 @@ void Estimator::reset_state()
   gyro_LPF_.x = 0;
   gyro_LPF_.y = 0;
   gyro_LPF_.z = 0;
+
+  va_vec_.x = 0;
+  va_vec_.y = 0;
+  va_vec_.z = 0;
 
   state_.timestamp_us = RF_.board_.clock_micros();
 
@@ -138,6 +144,24 @@ void Estimator::run()
   last_time_ = now_us;
   state_.timestamp_us = now_us;
 
+  // First do the aoa estimation, if applicable
+  if(RF_.params_.get_param_int(PARAM_FIXED_WING) && RF_.sensors_.data().diff_pressure_present)
+  {
+    /// TODO: these should be params
+    float c0 = 600;
+    float alpha0 = -0.725;
+
+    float va = RF_.sensors_.data().diff_pressure_velocity;
+    float pitch_rate = state_.angular_velocity.y;
+
+    // propogate the angle of attack using equation 14 in Mahoney fixed-wing paper
+    state_.alpha = dt*(-c0/va*state_.alpha + pitch_rate + alpha0);
+
+    // equation 13 Mahoney (fixed-wing)
+    va_vec_.x = cos(state_.alpha);
+    va_vec_.z = sin(state_.alpha);
+  }
+
   // Crank up the gains for the first few seconds for quick convergence
   if (now_us < (uint64_t)RF_.params_.get_param_int(PARAM_INIT_TIME)*1000)
   {
@@ -154,7 +178,7 @@ void Estimator::run()
   run_LPF();
 
   // add in accelerometer
-  float a_sqrd_norm = sqrd_norm(accel_LPF_);
+  float a_sqrd_norm = sqrd_norm(vector_sub(accel_LPF_, cross(state_.angular_velocity, va_vec_)));
 
   vector_t w_acc;
   if (RF_.params_.get_param_int(PARAM_FILTER_USE_ACC)
@@ -162,8 +186,8 @@ void Estimator::run()
   {
     // Get error estimated by accelerometer measurement
     last_acc_update_us_ = now_us;
-    // turn measurement into a unit vector
-    vector_t a = vector_normalize(accel_LPF_);
+    // turn measurement into a unit vector, cross product from equation 12 Mahoney fixed-wing paper
+    vector_t a = vector_normalize(vector_sub(accel_LPF_, cross(state_.angular_velocity, va_vec_)));
     // Get the quaternion from accelerometer (low-frequency measure q)
     // (Not in either paper)
     quaternion_t q_acc_inv = quat_from_two_unit_vectors(g_, a);

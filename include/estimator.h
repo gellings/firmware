@@ -56,6 +56,8 @@ public:
     float pitch;
     float yaw;
     uint64_t timestamp_us;
+
+    float alpha;
   };
 
   Estimator(ROSflight& _rf);
@@ -85,6 +87,8 @@ private:
   vector_t gyro_LPF_;
 
   vector_t w_acc_;
+
+  vector_t va_vec_;
 
   void run_LPF();
 };
